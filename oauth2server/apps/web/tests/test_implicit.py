@@ -1,4 +1,4 @@
-import urllib
+import six
 
 from rest_framework.test import APIClient
 from django.test import TestCase
@@ -22,7 +22,7 @@ class ImplicitTest(TestCase):
     def test_success(self):
         self.assertEqual(OAuthAuthorizationCode.objects.count(), 0)
 
-        query_string = urllib.urlencode({
+        query_string = six.moves.urllib.parse.urlencode({
             'client_id': 'testclient',
             'response_type': 'token',
             'redirect_uri': 'http://www.example.com',

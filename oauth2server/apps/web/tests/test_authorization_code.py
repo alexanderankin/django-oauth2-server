@@ -1,10 +1,15 @@
-import urllib
+import six
 import base64
+import warnings
 
 from rest_framework.test import APIClient
 from rest_framework import status
 from django.test import TestCase
 from django.utils import timezone
+
+from django.utils.deprecation import (
+    RemovedInDjango20Warning, RemovedInDjango110Warning,
+)
 
 from apps.tokens.models import (
     OAuthAuthorizationCode,
@@ -19,6 +24,104 @@ class AuthorizationCodeTest(TestCase):
         'test_credentials',
         'test_scopes',
     ]
+
+    def assertRedirects(self, response, expected_url, status_code=302,
+                        target_status_code=200, host=None, msg_prefix='',
+                        fetch_redirect_response=True):
+        """Asserts that a response redirected to a specific URL, and that the
+        redirect URL can be loaded.
+
+        Note that assertRedirects won't work for external links since it uses
+        TestClient to do a request (use fetch_redirect_response=False to check
+        such links without fetching them).
+        """
+        if host is not None:
+            warnings.warn(
+                "The host argument is deprecated and no longer used by assertRedirects",
+                RemovedInDjango20Warning, stacklevel=2
+            )
+
+        if msg_prefix:
+            msg_prefix += ": "
+
+        if hasattr(response, 'redirect_chain'):
+            # The request was a followed redirect
+            self.assertTrue(len(response.redirect_chain) > 0,
+                msg_prefix + "Response didn't redirect as expected: Response"
+                " code was %d (expected %d)" %
+                    (response.status_code, status_code))
+
+            self.assertEqual(response.redirect_chain[0][1], status_code,
+                msg_prefix + "Initial response didn't redirect as expected:"
+                " Response code was %d (expected %d)" %
+                    (response.redirect_chain[0][1], status_code))
+
+            url, status_code = response.redirect_chain[-1]
+            scheme, netloc, path, query, fragment = six.moves.urllib.parse.urlsplit(url)
+
+            self.assertEqual(response.status_code, target_status_code,
+                msg_prefix + "Response didn't redirect as expected: Final"
+                " Response code was %d (expected %d)" %
+                    (response.status_code, target_status_code))
+
+        else:
+            # Not a followed redirect
+            self.assertEqual(response.status_code, status_code,
+                msg_prefix + "Response didn't redirect as expected: Response"
+                " code was %d (expected %d)" %
+                    (response.status_code, status_code))
+
+            url = response.url
+            scheme, netloc, path, query, fragment = six.moves.urllib.parse.urlsplit(url)
+
+            if fetch_redirect_response:
+                redirect_response = response.client.get(path, QueryDict(query),
+                                                        secure=(scheme == 'https'))
+
+                # Get the redirection page, using the same client that was used
+                # to obtain the original response.
+                self.assertEqual(redirect_response.status_code, target_status_code,
+                    msg_prefix + "Couldn't retrieve redirection page '%s':"
+                    " response code was %d (expected %d)" %
+                        (path, redirect_response.status_code, target_status_code))
+
+        if url != expected_url:
+            # For temporary backwards compatibility, try to compare with a relative url
+            e_scheme, e_netloc, e_path, e_query, e_fragment = six.moves.urllib.parse.urlsplit(expected_url)
+            relative_url = six.moves.urllib.parse.urlunsplit(('', '', e_path, e_query, e_fragment))
+            if url == relative_url:
+                warnings.warn(
+                    "assertRedirects had to strip the scheme and domain from the "
+                    "expected URL, as it was always added automatically to URLs "
+                    "before Django 1.9. Please update your expected URLs by "
+                    "removing the scheme and domain.",
+                    RemovedInDjango20Warning, stacklevel=2)
+                expected_url = relative_url
+
+        if url != expected_url:
+            urlo = six.moves.urllib.parse.urlparse(url)
+            urloq = six.moves.urllib.parse.parse_qs(urlo.query)
+            urle = six.moves.urllib.parse.urlparse(expected_url)
+            urleq = six.moves.urllib.parse.parse_qs(expected_url.query)
+
+            self.assertDictEqual(urloq, urleq)
+            # self.assertEqual(urlo.path, urle.path)
+
+            # determine expected_url without its query
+            e_scheme, e_netloc, e_path, e_query, e_fragment = six.moves.urllib.parse.urlsplit(expected_url)
+            e_noq = six.moves.urllib.parse.urlunsplit(('', '', e_path, '', e_fragment))
+
+            # determine url without its query
+            u_scheme, u_netloc, u_path, u_query, u_fragment = six.moves.urllib.parse.urlsplit(expected_url)
+            u_noq = six.moves.urllib.parse.urlunsplit(('', '', u_path, '', u_fragment))
+
+            self.assertEqual(url, expected_url,
+                msg_prefix + "Response redirected to '%s', expected '%s'" %
+                    (url, expected_url))
+        else:
+            self.assertEqual(url, expected_url,
+                msg_prefix + "Response redirected to '%s', expected '%s'" %
+                    (url, expected_url))
 
     def setUp(self):
         self.api_client = APIClient()
@@ -86,7 +189,7 @@ class AuthorizationCodeTest(TestCase):
     def test_missing_state(self):
         self.assertEqual(OAuthAuthorizationCode.objects.count(), 0)
 
-        query_string = urllib.urlencode({
+        query_string = six.moves.urllib.parse.urlencode({
             'client_id': 'testclient',
             'response_type': 'code',
             'redirect_uri': 'http://www.example.com'
@@ -103,7 +206,7 @@ class AuthorizationCodeTest(TestCase):
     def test_success(self):
         self.assertEqual(OAuthAuthorizationCode.objects.count(), 0)
 
-        query_string = urllib.urlencode({
+        query_string = six.moves.urllib.parse.urlencode({
             'client_id': 'testclient',
             'response_type': 'code',
             'redirect_uri': 'http://www.example.com',
@@ -139,7 +242,7 @@ class AuthorizationCodeTest(TestCase):
                 'code': auth_code.code,
             },
             HTTP_AUTHORIZATION='Basic: {}'.format(
-                base64.encodestring('testclient:testpassword')),
+                base64.encodestring(six.binary_type('testclient:testpassword', 'utf8'))),
         )
 
         access_token = OAuthAccessToken.objects.last()
@@ -159,7 +262,7 @@ class AuthorizationCodeTest(TestCase):
     def test_expired_code(self):
         self.assertEqual(OAuthAuthorizationCode.objects.count(), 0)
 
-        query_string = urllib.urlencode({
+        query_string = six.moves.urllib.parse.urlencode({
             'client_id': 'testclient',
             'response_type': 'code',
             'redirect_uri': 'http://www.example.com',
@@ -198,7 +301,7 @@ class AuthorizationCodeTest(TestCase):
                 'code': auth_code.code,
             },
             HTTP_AUTHORIZATION='Basic: {}'.format(
-                base64.encodestring('testclient:testpassword')),
+                base64.encodestring(six.binary_type('testclient:testpassword', 'utf8'))),
         )
 
         self.assertEqual(OAuthAccessToken.objects.count(), 0)

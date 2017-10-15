@@ -1,5 +1,6 @@
 import urllib
 import uuid
+import six
 
 from django.http import HttpResponseRedirect
 
@@ -19,7 +20,7 @@ def factory(response_type):
 class AbstractResponseType(object):
 
     def denied_redirect(self, state, redirect_uri):
-        query_string = urllib.urlencode({
+        query_string = six.moves.urllib.parse.urlencode({
             'error': u'access_denied',
             'error_description': u'The user denied access to your application',
             'state': state,
@@ -37,14 +38,14 @@ class CodeResponseType(AbstractResponseType):
                 state=state, redirect_uri=redirect_uri)
 
         auth_code = OAuthAuthorizationCode.objects.create(
-            code=unicode(uuid.uuid4()),
+            code=six.text_type(uuid.uuid4()),
             expires_at=OAuthAuthorizationCode.new_expires_at(),
             client=client,
             redirect_uri=redirect_uri,
         )
         auth_code.scopes.add(*scopes)
 
-        query_string = urllib.urlencode({
+        query_string = six.moves.urllib.parse.urlencode({
             'code': auth_code.code,
             'state': state,
         })
@@ -61,7 +62,7 @@ class ImplicitResponseType(AbstractResponseType):
                 state=state, redirect_uri=redirect_uri)
 
         access_token = OAuthAccessToken.objects.create(
-            access_token=unicode(uuid.uuid4()),
+            access_token=six.text_type(uuid.uuid4()),
             expires_at=OAuthAccessToken.new_expires_at(),
             client=client,
         )

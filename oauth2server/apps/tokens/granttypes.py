@@ -1,4 +1,5 @@
 import uuid
+import six
 
 from django.conf import settings
 
@@ -38,12 +39,12 @@ class CreateTokenMixin(object):
 
     def create_access_token(self, client, user=None):
         refresh_token = OAuthRefreshToken.objects.create(
-            refresh_token=unicode(uuid.uuid4()),
+            refresh_token=six.text_type(uuid.uuid4()),
             expires_at=OAuthRefreshToken.new_expires_at(),
         )
 
         access_token = OAuthAccessToken.objects.create(
-            access_token=unicode(uuid.uuid4()),
+            access_token=six.text_type(uuid.uuid4()),
             expires_at=OAuthAccessToken.new_expires_at(),
             client=client,
             user=user,

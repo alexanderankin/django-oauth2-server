@@ -1,4 +1,5 @@
 import base64
+import six
 
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -54,7 +55,7 @@ class UserCredentialsTest(TestCase):
                 'password': 'testpassword',
             },
             HTTP_AUTHORIZATION='Basic: {}'.format(
-                base64.encodestring('bogus:bogus')),
+                base64.encodestring(six.binary_type('bogus:bogus', 'utf8'))),
         )
 
         self.assertEqual(OAuthAccessToken.objects.count(), 0)
@@ -77,7 +78,7 @@ class UserCredentialsTest(TestCase):
                 'password': 'testpassword',
             },
             HTTP_AUTHORIZATION='Basic: {}'.format(
-                base64.encodestring('testclient:testpassword')),
+                base64.encodestring(six.binary_type('testclient:testpassword', 'utf8'))),
         )
 
         self.assertEqual(OAuthAccessToken.objects.count(), 1)

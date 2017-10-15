@@ -3,6 +3,7 @@ from rest_framework.exceptions import APIException
 from rest_framework import status
 from rest_framework.response import Response
 from django.utils.translation import ugettext_lazy as _
+import six
 
 
 class ClientCredentialsRequiredException(APIException):
@@ -125,7 +126,7 @@ def custom_exception_handler(exc, context):
         # Unhandled exceptions (500 internal server errors)
         response = Response(data={
             'error': 'server_error',
-            'error_description': unicode(exc),
+            'error_description': six.text_type(exc),
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         return response
 
